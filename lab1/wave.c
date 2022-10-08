@@ -1,7 +1,18 @@
+/*
+
+	High Performance Computing
+	Lab1
+
+	Gabriel Bustamante
+	Nicolas Zelada
+
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <omp.h>
 
 #define C 1.0
 #define DT 0.1
@@ -11,8 +22,7 @@
 // ./wave -N 256 -T 10001 -H 2 -f salidas/aqui_ -t 100
 
 int main(int argc, char **argv){
- 
-	// char nombreArchivo[] = "salidas/ola_";
+
 	char *nombreArchivo = NULL;
 	int n = 0;
 	int iteraciones = 0;
@@ -21,7 +31,7 @@ int main(int argc, char **argv){
 
 	// Parametros de entrada
 	int c;
-	while (((c = getopt(argc, argv, "N:T:H:f:t:;")) != -1)){
+	while (((c = getopt(argc, argv, "N:T:H:f:t:")) != -1)){
 		switch (c){
 		case 'N': // tamano grilla
 			n = atof(optarg);
@@ -41,14 +51,13 @@ int main(int argc, char **argv){
 		}
 	}
 
-	// Inicializacion de variables
+	// Se reserva memoria para las variables
 	float *H = malloc(n*n*sizeof(float));   // H actual
 	float *H_1 = malloc(n*n*sizeof(float));	// H en t-1
 	float *H_2 = malloc(n*n*sizeof(float));	// H en t-2
 	int limiteInf = 0.4*n;	// limite inferior para inicio de la ola
 	int limiteSup = 0.6*n;	// limite superior para inicio de la ola
 	int iterAux = 0;
-
 
 	// Inicializar en 0 o F segun corresponda toda H
 	for (int i = 0; i < n; i++){
@@ -61,10 +70,9 @@ int main(int argc, char **argv){
 		}
 	}
 
-	// Ciclo para la ola
 	for (int k = 0; k < iteraciones; k++){
-
 		if(k==0){
+			#pragma omp parallel for shared(H,H_1,n)num_threads(hebras)
 			for (int i = 0; i < n; i++){
 				for (int j = 0; j < n; j++){
 					if(i==0 || j==0 || i==n-1 || j==n-1){
@@ -75,6 +83,7 @@ int main(int argc, char **argv){
 				}
 			}
 		}else{
+			#pragma omp parallel for shared(H,H_1,H_2,n)num_threads(hebras)
 			for (int i = 0; i < n; i++){
 				for (int j = 0; j < n; j++){
 					if(i==0 || j==0 || i==n-1 || j==n-1){
@@ -85,6 +94,7 @@ int main(int argc, char **argv){
 				}		
 			}
 		}
+
 
 		// Se guarda t-1 y t-2
 		for (int i = 0; i < n; i++){
@@ -111,6 +121,11 @@ int main(int argc, char **argv){
 			iterAux += 1;
 		}
 	}
+
+	// Liberacion de memoria
+	free(H);
+	free(H_1);
+	free(H_2);
 
 	return 0;
 }
