@@ -21,36 +21,36 @@
 // ./wave -N 256 -x 2 -y 2 -T 1001 -f salidas/aqui.raw
 
 __global__ void olaInicial(float *H, float *H_1, int n){
-
-	int i;
+	
+	int i, j;
 	i = blockDim.x*blockIdx.x + threadIdx.x;  // global index x (horizontal)
-	// j = blockDim.y*blockIdx.y + threadIdx.y;  // global index y (vertical)
+	j = blockDim.y*blockIdx.y + threadIdx.y;  // global index y (vertical)
 
-	if (i<n){
-		for (int j = 0; j < n; j++){
-			if(i==0 || j==0 || i==n-1 || j==n-1){
-				H[i*n + j] = 0;
-			}else{
-				H[i*n + j] = H_1[i*n + j] + ((C*C)/2.0)*((DT*DT)/(DD*DD))*(H_1[(i+1)*n + j] + H_1[(i-1)*n + j] + H_1[i*n + (j-1)] + H_1[i*n + (j+1)] - 4*H_1[i*n + j]);
-			}
+	if (i<n && j<n){
+		
+		if(i==0 || j==0 || i==n-1 || j==n-1){
+			H[i*n + j] = 0;
+		}else{
+			H[i*n + j] = H_1[i*n + j] + ((C*C)/2.0)*((DT*DT)/(DD*DD))*(H_1[(i+1)*n + j] + H_1[(i-1)*n + j] + H_1[i*n + (j-1)] + H_1[i*n + (j+1)] - 4*H_1[i*n + j]);
 		}
+		
 	}
 }
 
 __global__ void ola(float *H, float *H_1, float *H_2, int n){
-
-	int i;
+	
+	int i, j;
 	i = blockDim.x*blockIdx.x + threadIdx.x;  // global index x (horizontal)
-	// j = blockDim.y*blockIdx.y + threadIdx.y;  // global index y (vertical)
+	j = blockDim.y*blockIdx.y + threadIdx.y;  // global index y (vertical)
 
-	if (i<n){
-		for (int j = 0; j < n; j++){
-			if(i==0 || j==0 || i==n-1 || j==n-1){
-				H[i*n + j] = 0;
-			}else{
-				H[i*n + j] = 2*H_1[i*n + j] - H_2[i*n + j] + (C*C)*((DT*DT)/(DD*DD))*(H_1[(i+1)*n + j] + H_1[(i-1)*n + j] + H_1[i*n + (j-1)] + H_1[i*n + (j+1)] - 4*H_1[i*n + j]);
-			}
+	if (i<n && j<n){
+		
+		if(i==0 || j==0 || i==n-1 || j==n-1){
+			H[i*n + j] = 0;
+		}else{
+			H[i*n + j] = 2*H_1[i*n + j] - H_2[i*n + j] + (C*C)*((DT*DT)/(DD*DD))*(H_1[(i+1)*n + j] + H_1[(i-1)*n + j] + H_1[i*n + (j-1)] + H_1[i*n + (j+1)] - 4*H_1[i*n + j]);
 		}
+		
 	}
 }
 
@@ -59,8 +59,8 @@ __host__ int main(int argc, char* argv[]){
 	char *nombreArchivo = NULL;
 	int n = 0;
 	int iteraciones = 0;
-	int gridSize = 0; //x
-	int blockSize = 0; //y
+	dim3 gridSize; 
+	dim3 blockSize; 
 
 	// Parametros de entrada
 	int c;
@@ -68,12 +68,14 @@ __host__ int main(int argc, char* argv[]){
 		switch (c){
 		case 'N': // tamano grilla
 			n = atof(optarg);
+			gridSize.x = n;
+			gridSize.y = n;
 			break;
 		case 'x': // x
-			gridSize = atof(optarg);
+			blockSize.x = atof(optarg);
 			break;
 		case 'y': // y
-			blockSize = atof(optarg);
+			blockSize.y = atof(optarg);
 			break;
 		case 'T': // numero de pasos
 			iteraciones = atof(optarg);
@@ -121,10 +123,10 @@ __host__ int main(int argc, char* argv[]){
 	for (int k = 0; k < iteraciones; k++){
 		if(k==0){
 			olaInicial<<<gridSize, blockSize>>>(D_H,D_H_1,n);
-			// cudaDeviceSynchronize();
+			cudaDeviceSynchronize();
 		}else{
 			ola<<<gridSize, blockSize>>>(D_H,D_H_1,D_H_2,n);
-			// cudaDeviceSynchronize();
+			cudaDeviceSynchronize();
 		}
 
 		// copiar todo device al host
@@ -141,9 +143,9 @@ __host__ int main(int argc, char* argv[]){
 		}
 
 		// copiar host al device
-		cudaMemcpy(D_H, H, n*n*sizeof(float), cudaMemcpyDeviceToHost);
-		cudaMemcpy(D_H_1, H_1, n*n*sizeof(float), cudaMemcpyDeviceToHost);
-		cudaMemcpy(D_H_2, H_2, n*n*sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(D_H, H, n*n*sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(D_H_1, H_1, n*n*sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(D_H_2, H_2, n*n*sizeof(float), cudaMemcpyHostToDevice);
 	}
 
 	FILE *f = fopen(nombreArchivo,"w");
