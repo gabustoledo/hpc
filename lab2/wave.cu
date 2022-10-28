@@ -20,7 +20,11 @@
 
 // ./wave -N 256 -x 2 -y 2 -T 1001 -f salidas/aqui.raw
 
+__device__ unsigned long long totalThr = 0;
+
 __global__ void olaInicial(float *H, float *H_1, int n){
+	
+	atomicAdd(&totalThr, 1);
 	
 	int i, j;
 	i = blockDim.x*blockIdx.x + threadIdx.x;  // global index x (horizontal)
@@ -39,10 +43,12 @@ __global__ void olaInicial(float *H, float *H_1, int n){
 
 __global__ void ola(float *H, float *H_1, float *H_2, int n){
 	
+	atomicAdd(&totalThr, 1);
+
 	int i, j;
 	i = blockDim.x*blockIdx.x + threadIdx.x;  // global index x (horizontal)
 	j = blockDim.y*blockIdx.y + threadIdx.y;  // global index y (vertical)
-
+	
 	if (i<n && j<n){
 		
 		if(i==0 || j==0 || i==n-1 || j==n-1){
@@ -61,6 +67,10 @@ __host__ int main(int argc, char* argv[]){
 	int iteraciones = 0;
 	dim3 gridSize; 
 	dim3 blockSize; 
+
+	cudaEvent_t start, stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
 
 	// Parametros de entrada
 	int c;
@@ -123,10 +133,12 @@ __host__ int main(int argc, char* argv[]){
 	for (int k = 0; k < iteraciones; k++){
 		if(k==0){
 			olaInicial<<<gridSize, blockSize>>>(D_H,D_H_1,n);
-			cudaDeviceSynchronize();
+			//cudaDeviceSynchronize();
 		}else{
+			cudaEventRecord(start);
 			ola<<<gridSize, blockSize>>>(D_H,D_H_1,D_H_2,n);
-			cudaDeviceSynchronize();
+			cudaEventRecord(stop);
+			//cudaDeviceSynchronize();
 		}
 
 		// copiar todo device al host
@@ -152,6 +164,12 @@ __host__ int main(int argc, char* argv[]){
 	fwrite(H,sizeof(float),n*n,f);
 	fclose(f);
 
+	unsigned long long total;
+    cudaMemcpyFromSymbol(&total, totalThr, sizeof(unsigned long long));
+    printf("Total threads counted: %llu\n", total);
+	float milliseconds = 0;
+	cudaEventElapsedTime(&milliseconds, start, stop);
+	printf("Time elapsed:%f\n",milliseconds);
 	// Liberacion de memoria
 	free(H);
 	free(H_1);
